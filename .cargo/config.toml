@@ -11,4 +11,6 @@ rustflags = [
 rustflags = [
   "-C", "link-arg=-undefined",
   "-C", "link-arg=dynamic_lookup",
+  "-C", "link-arg=-L/opt/homebrew/opt/python@3.12/Frameworks/Python.framework/Versions/3.12/lib/python3.12/config-3.12-darwin",
+  "-C", "link-arg=-lpython3.12",
 ]
