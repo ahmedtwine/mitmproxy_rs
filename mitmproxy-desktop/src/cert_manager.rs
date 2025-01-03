@@ -119,20 +119,20 @@ impl CertManager {
     fn verify_cert_in_keychain(&self) -> Result<bool> {
         use std::process::Command;
 
-        // Check all keychains for our certificates
+        // Check for our certificate in all keychains
         let find_output = Command::new("security")
             .args(&[
-                "find-identity",
-                "-p",
-                "ssl",
-                "-a", // All matches
+                "find-certificate",
+                "-a", // Find all matching certificates
+                "-c", // Match on certificate name
+                CA_NAME,
             ])
             .output()?;
 
         let output_str = String::from_utf8_lossy(&find_output.stdout);
 
-        // If we find any of our certificates, they need cleanup
-        Ok(output_str.contains("Mitmproxy Desktop Root CA"))
+        // If we find any instances of our certificate name in the output
+        Ok(output_str.contains(CA_NAME))
     }
 
     #[cfg(target_os = "macos")]

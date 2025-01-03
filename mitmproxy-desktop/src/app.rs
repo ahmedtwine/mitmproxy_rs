@@ -120,11 +120,14 @@ impl iced::Application for MitmproxyDesktop {
         let cert_status = if !self.cert_manager.has_ca() {
             column![button("Generate CA Certificate").on_press(Message::GenerateCA)]
         } else {
-            column![row![
-                text("CA Certificate installed ✓").size(16),
-                button("Regenerate").on_press(Message::GenerateCA)
+            column![
+                text("CA Certificate installed and trusted ✓")
+                    .size(16)
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.0, 0.7, 0.0
+                    ),)),
+                text("(Click 'Start Proxy' to begin intercepting traffic)").size(12)
             ]
-            .spacing(10)]
         };
 
         let mut content = column![title, cert_status].spacing(20);
