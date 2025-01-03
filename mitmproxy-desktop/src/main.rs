@@ -1,4 +1,5 @@
 mod app;
+mod cert_manager;
 mod config;
 mod proxy;
 

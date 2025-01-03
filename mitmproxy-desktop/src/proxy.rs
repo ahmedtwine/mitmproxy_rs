@@ -8,7 +8,9 @@ use hudsucker::{
     Body, HttpContext, HttpHandler, Proxy, RequestOrResponse, WebSocketContext, WebSocketHandler,
 };
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::sync::oneshot;
+use tokio::sync::Mutex;
 use tracing::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,19 +46,21 @@ impl WebSocketHandler for ProxyHandler {
     }
 }
 
+#[derive(Clone)]
 pub struct ProxyManager {
-    shutdown_sender: Option<oneshot::Sender<()>>,
+    shutdown_sender: Arc<Mutex<Option<oneshot::Sender<()>>>>,
 }
 
 impl ProxyManager {
     pub fn new() -> Self {
         Self {
-            shutdown_sender: None,
+            shutdown_sender: Arc::new(Mutex::new(None)),
         }
     }
 
-    pub async fn start(&mut self, port: u16, cert_path: Option<String>) -> Result<()> {
-        if self.shutdown_sender.is_some() {
+    pub async fn start(&self, port: u16, cert_path: Option<String>) -> Result<()> {
+        let mut sender = self.shutdown_sender.lock().await;
+        if sender.is_some() {
             return Ok(());
         }
 
@@ -77,8 +81,8 @@ impl ProxyManager {
             aws_lc_rs::default_provider(),
         );
 
-        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
-        self.shutdown_sender = Some(shutdown_sender);
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        *sender = Some(shutdown_tx);
 
         // Build and start the proxy
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -88,7 +92,7 @@ impl ProxyManager {
             .with_rustls_client(aws_lc_rs::default_provider())
             .with_http_handler(ProxyHandler)
             .with_graceful_shutdown(async move {
-                let _ = shutdown_receiver.await;
+                let _ = shutdown_rx.await;
             })
             .build()?;
 
@@ -103,9 +107,10 @@ impl ProxyManager {
         Ok(())
     }
 
-    pub async fn stop(&mut self) -> Result<()> {
-        if let Some(sender) = self.shutdown_sender.take() {
-            let _ = sender.send(());
+    pub async fn stop(&self) -> Result<()> {
+        let mut sender = self.shutdown_sender.lock().await;
+        if let Some(s) = sender.take() {
+            let _ = s.send(());
         }
         Ok(())
     }
