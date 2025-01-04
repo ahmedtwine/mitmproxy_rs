@@ -13,3 +13,15 @@ desktop-build:
 # Run the desktop app in release mode
 desktop-run: desktop-build
     ./target/release/mitmproxy-desktop 
+
+# Install npm dependencies for Tauri frontend
+tauri-install:
+    cd mitmproxy-desktop/src/neohtop && npm install
+
+# Run Tauri app in development mode
+tauri-dev: tauri-install
+    cd mitmproxy-desktop/src/neohtop && npm run tauri dev
+
+# Build Tauri app for production
+tauri-build: tauri-install
+    cd mitmproxy-desktop/src/neohtop && npm run tauri build
