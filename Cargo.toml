@@ -9,6 +9,7 @@ members = [
     "mitmproxy-windows/redirector",
     "wireguard-test-client",
     "mitmproxy-desktop",
+    "mitmproxy-desktop/src/neohtop/src-tauri",
 ]
 default-members = [
     ".",
@@ -19,6 +20,7 @@ default-members = [
     "mitmproxy-windows/redirector",
     "wireguard-test-client",
     "mitmproxy-desktop",
+    "mitmproxy-desktop/src/neohtop/src-tauri",
 ]
 
 [workspace.package]
