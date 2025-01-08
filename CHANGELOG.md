@@ -1,6 +1,14 @@
 ## Unreleased: mitmproxy_rs next
 
 
+## 06 January 2025: mitmproxy_rs 0.11.4
+
+- Fix PyInstaller hooks to include `mitmproxy_linux`.
+
+## 05 January 2025: mitmproxy_rs 0.11.3
+
+- Fix CI to build wheels compatible with Python 3.13 for mitmproxy-linux.
+
 ## 03 January 2025: mitmproxy_rs 0.11.2
 
 - Add local redirect mode for Linux.
