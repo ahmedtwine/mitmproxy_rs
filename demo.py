@@ -1,5 +1,5 @@
 """
-Complete mitmproxy_rs Local Redirector Demo
+mitmproxy_rs Traffic Interception Test
 Run with: just demo
 """
 
@@ -7,131 +7,111 @@ import asyncio
 import mitmproxy_rs
 
 async def handle_tcp_stream(stream):
-    """Handle TCP connections from intercepted apps"""
-    print(f"TCP connection intercepted: {stream}")
+    """Handle intercepted TCP connections"""
+    print(f"TCP INTERCEPTED: {stream.peername} -> {stream.sockname}")
     try:
         data = await stream.read(1024)
-        if data:
-            print(f"HTTP request: {data[:200].decode('utf-8', errors='ignore')}")
+        if data and data.startswith(b'GET '):
+            request = data.decode('utf-8', errors='ignore').split('\n')[0]
+            print(f"HTTP: {request}")
     except Exception as e:
         print(f"TCP error: {e}")
 
 async def handle_udp_stream(stream):
-    """Handle UDP packets from intercepted apps"""
-    print(f"UDP packet intercepted: {stream}")
+    """Handle intercepted UDP packets"""
+    print(f"UDP INTERCEPTED: {stream}")
 
-async def demo():
-    print(" mitmproxy_rs Local Redirector Demo")
-    print("=" * 50)
+def check_vpn_tunnel():
+    """Check if VPN tunnel was created"""
+    import subprocess
+    try:
+        result = subprocess.run(["scutil", "--nc", "list"], capture_output=True, text=True)
+        return "mitmproxy" in result.stdout.lower()
+    except:
+        return False
 
-    # Check if redirector is available
+async def main():
+    print("mitmproxy_rs Traffic Interception Test")
+    print("=" * 40)
+
+    # Check if local redirect is available
     reason = mitmproxy_rs.local.LocalRedirector.unavailable_reason()
     if reason:
         print(f"Local redirect unavailable: {reason}")
         return
 
-    print("Local redirect mode available!")
+    print("Local redirect mode available")
 
-    # Show running processes
-    print("\n Running processes:")
     try:
-        processes = mitmproxy_rs.process_info.active_executables()
-        visible = [p for p in processes if p.is_visible and not p.is_system]
-
-        for i, proc in enumerate(visible[:5], 1):
-            print(f"  {i}. {proc.display_name}")
-
-        if len(visible) > 5:
-            print(f"  ... and {len(visible) - 5} more")
-
-    except Exception as e:
-        print(f"Error: {e}")
-
-    # Test real redirector
-    print("\n Starting real redirector...")
-    try:
+        # Start the redirector
+        print("\nStarting redirector...")
         redirector = await mitmproxy_rs.local.start_local_redirector(
             handle_tcp_stream,
             handle_udp_stream
         )
-        # Test 1: All traffic (should definitely work)
-        print("\n1. Testing 'all' - intercepts ALL network traffic")
-        redirector.set_intercept("all")
-        desc = mitmproxy_rs.local.LocalRedirector.describe_spec("all")
-        print("    WARNING: Will intercept ALL apps!")
-        print("   Test: curl -v http://httpbin.org/get")
-        print("   Waiting 10 seconds for any traffic...")
-        await asyncio.sleep(10)
+        print("Redirector started")
 
-        # Test 2: Specific process
-        print("\n2. Testing 'process:curl' - intercepts only curl")
-        redirector.set_intercept("process:curl")
-        desc = mitmproxy_rs.local.LocalRedirector.describe_spec("process:curl")
-        print("   Test: curl -v http://httpbin.org/get")
-        print("   Waiting 10 seconds for curl traffic...")
-        await asyncio.sleep(10)
+        # Check if VPN tunnel was created
+        print("\nChecking VPN tunnel creation...")
+        if check_vpn_tunnel():
+            print("VPN tunnel created successfully!")
 
-        print("\nIf no interception seen:")
-        print("   - Network Extension may need manual activation")
-        print("   - Try System Settings > General > Login Items & Extensions")
-        print("   - Look for mitmproxy Network Extension and enable it")
+            # Test traffic interception
+            print("\nTesting traffic interception...")
+            redirector.set_intercept("all")
+            print("Monitoring all network traffic for 10 seconds...")
+            print("Try running: curl http://httpbin.org/get")
 
-        print("\nPress Ctrl+C to stop...")
-        await redirector.wait_closed()
+            await asyncio.sleep(10)
+
+            print("\nTest completed")
+        else:
+            print("VPN tunnel creation failed!")
+            print("\nThis is the core issue preventing traffic interception.")
+            print("The Network Extension needs a VPN tunnel to redirect traffic.")
+            diagnose_issue()
+
+        redirector.close()
 
     except Exception as e:
-        print(f"❌ Failed: {e}")
-        print("")
-        print("COMPLETE NETWORK EXTENSION STATUS:")
-        import subprocess
-        try:
-            # Check system extension status
-            result = subprocess.run(["systemextensionsctl", "list"], capture_output=True, text=True)
-            print("   System Extension:")
-            if "mitmproxy" in result.stdout:
-                if "[activated enabled]" in result.stdout:
-                    print("     System extension is activated and enabled")
-                else:
-                    print("     System extension found but not fully activated")
-            else:
-                print("     VPN configuration not found")
+        print(f"Redirector failed: {e}")
+        diagnose_issue()
 
-            # Check VPN configuration
-            result = subprocess.run(["scutil", "--nc", "list"], capture_output=True, text=True)
-            print("   VPN Configuration:")
-            if "mitmproxy" in result.stdout.lower():
-                print("     VPN configuration found")
-                # Check VPN status
-                result = subprocess.run(["scutil", "--nc", "show", "mitmproxy"], capture_output=True, text=True)
-                if "Connected" in result.stdout:
-                    print("     VPN tunnel is connected")
-                else:
-                    print(" VPN configuration exists but tunnel not connected")
-            else:
-                print("     VPN configuration missing - this is the main issue!")
-                print("     The redirector app needs to create the VPN tunnel")
+def diagnose_issue():
+    """Diagnose the VPN tunnel issue"""
+    import subprocess
+    print("\nDIAGNOSIS:")
 
-            # Check redirector app
-            import os
-            print("   Redirector App:")
-            if os.path.exists("/Applications/Mitmproxy Redirector.app"):
-                print("     ✅ Mitmproxy Redirector.app exists")
-            else:
-                print("     ❌ Mitmproxy Redirector.app missing")
+    # Check system extension
+    try:
+        result = subprocess.run(["systemextensionsctl", "list"], capture_output=True, text=True)
+        if "mitmproxy" in result.stdout and "[activated enabled]" in result.stdout:
+            print("System Extension: Activated and enabled")
+        else:
+            print("System Extension: Not properly activated")
+            print("Fix: System Settings > General > Login Items & Extensions")
+            return
+    except:
+        print("System Extension: Check failed")
+        return
 
-        except Exception as debug_e:
-            print(f"   Debug check failed: {debug_e}")
+    # Check redirector app
+    import os
+    if os.path.exists("/Applications/Mitmproxy Redirector.app"):
+        print("Redirector App: Installed")
+    else:
+        print("Redirector App: Missing")
+        return
 
-        print("")
-        print(" ROOT CAUSE ANALYSIS:")
-        print("   The Network Extension needs TWO components:")
-        print("   1. ✅ System Extension (this is working)")
-        print("   2. ❌ VPN Tunnel Configuration (this is missing)")
-        print("")
-        print("   The VPN tunnel is created when the redirector app is launched")
-        print("   with a unix socket path. This triggers NETransparentProxyManager")
-        print("   which creates the VPN configuration and starts the tunnel.")
-        print("")
+    print("VPN Tunnel: Creation failed")
+    print("\nROOT CAUSE:")
+    print("The Swift redirector app is not successfully creating")
+    print("the VPN tunnel configuration via NETransparentProxyManager.")
+    print("\nPOSSIBLE SOLUTIONS:")
+    print("1. Check Console.app for VPN/NetworkExtension errors")
+    print("2. Disable conflicting VPN apps (Tailscale, etc.)")
+    print("3. Reset Network Settings in System Settings")
+    print("4. Check if VPN permissions are blocked in Security settings")
 
 if __name__ == "__main__":
-    asyncio.run(demo())
+    asyncio.run(main())
