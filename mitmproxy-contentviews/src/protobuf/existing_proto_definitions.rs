@@ -78,6 +78,12 @@ fn find_best_message(
                     rpc.method
                 );
             }
+            for method in file.messages() {
+                if method.proto().name() != rpc.method {
+                    continue;
+                }
+                return Some(method);
+            }
         }
         log::info!("Did not find {rpc} in protobuf definitions.");
     }
@@ -144,18 +150,41 @@ impl std::fmt::Display for RpcInfo {
         if !self.package.is_empty() {
             write!(f, "{}.", self.package)?;
         }
-        write!(f, "{}.{}", self.service, self.method)
+        if !self.service.is_empty() {
+            write!(f, "{}.", self.service)?;
+        }
+        write!(f, "{}", self.method)
     }
 }
 
 fn parse_file_descriptor_set(definitions_path: &Path) -> anyhow::Result<Vec<FileDescriptor>> {
     let mut parser = Parser::new();
     parser.pure();
-    if let Some(parent) = definitions_path.parent() {
-        parser.include(parent);
+    if definitions_path.is_dir() {
+        walk_proto_directory(definitions_path, &mut parser)?;
+    } else {
+        if let Some(parent) = definitions_path.parent() {
+            parser.include(parent);
+        }
+        parser.input(definitions_path);
     }
-    parser.input(definitions_path);
     let fds = parser.file_descriptor_set()?;
     FileDescriptor::new_dynamic_fds(fds.file, &[])
         .context("failed to create dynamic file descriptors")
+}
+
+fn walk_proto_directory(definitions_path: &Path, parser: &mut Parser) -> anyhow::Result<()> {
+    parser.include(definitions_path);
+    for entry in definitions_path
+        .read_dir()
+        .context("failed to read protobuf directory")?
+        .flatten()
+    {
+        if entry.metadata()?.is_dir() {
+            walk_proto_directory(entry.path().as_path(), parser)?;
+        } else if entry.file_name().to_string_lossy().ends_with(".proto") {
+            parser.input(entry.path());
+        }
+    }
+    Ok(())
 }
